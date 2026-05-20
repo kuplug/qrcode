@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Scan Logger</title>
+
+<!-- QR Scanner Library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --accent:   #238636;
+    --accent2:  #1f6feb;
+    --danger:   #da3633;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --green:    #3fb950;
+    --amber:    #d29922;
+    --radius:   10px;
+    --font:     'Courier New', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  header .logo {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  header h1 { font-size: 16px; font-weight: 600; }
+  header .chip {
+    margin-left: auto;
+    background: #0d2318;
+    color: var(--green);
+    border: 1px solid #238636;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-family: var(--font);
+  }
+  #statusDot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    display: inline-block;
+    margin-right: 4px;
+    transition: background .3s;
+  }
+  #statusDot.online  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  #statusDot.offline { background: var(--danger); }
+
+  /* ── Layout ── */
+  .container { max-width: 900px; margin: 0 auto; padding: 20px 16px; }
+
+  /* ── Config Banner ── */
+  .config-banner {
+    background: #161b22;
+    border: 1px solid var(--amber);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .config-banner input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-family: var(--font);
+    font-size: 13px;
+  }
+  .config-banner button {
+    background: var(--accent2);
+    color: #fff;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  /* ── Stats Row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-card .val {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: var(--font);
+    color: var(--accent2);
+  }
+  .stat-card .lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ── Main Grid ── */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+
+  /* ── Panel ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .panel-head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-body { padding: 16px; }
+
+  /* ── QR Scanner ── */
+  #qr-reader {
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  #qr-reader video { border-radius: 8px; }
+
+  .scan-result {
+    margin-top: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: var(--font);
+    font-size: 13px;
+    min-height: 48px;
+    word-break: break-all;
+    color: var(--green);
+  }
+  .scan-result.empty { color: var(--muted); font-style: italic; }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+  .btn {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: opacity .2s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-green  { background: var(--accent);  color: #fff; }
+  .btn-blue   { background: var(--accent2); color: #fff; }
+  .btn-red    { background: var(--danger);  color: #fff; }
+  .btn-gray   { background: #30363d; color: var(--text); }
+
+  /* Input manual */
+  .manual-row { display: flex; gap: 8px; margin-top: 12px; }
+  .manual-row input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .manual-row input::placeholder { color: var(--muted); }
+
+  /* ── Log Table ── */
+  .log-controls {
+    display: flex; gap: 8px; margin-bottom: 12px;
+  }
+  .log-controls input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  .log-table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th {
+    background: var(--bg);
+    color: var(--muted);
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #21262d;
+    vertical-align: top;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #1c2128; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: var(--font);
+  }
+  .badge-blue  { background: #0d2340; color: #58a6ff; border: 1px solid #1f6feb55; }
+  .badge-green { background: #0d2318; color: #3fb950; border: 1px solid #23863655; }
+
+  .btn-icon {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  .btn-icon:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: #1c2128;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all .25s;
+    pointer-events: none;
+    max-width: 280px;
+    z-index: 999;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.ok   { border-color: var(--green); color: var(--green); }
+  #toast.err  { border-color: var(--danger); color: #ff7b72; }
+
+  /* Chart mini */
+  .chart-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 60px;
+    margin-top: 12px;
+  }
+  .chart-bar {
+    flex: 1;
+    background: var(--accent2);
+    border-radius: 3px 3px 0 0;
+    min-height: 4px;
+    position: relative;
+    opacity: .7;
+    transition: opacity .2s;
+  }
+  .chart-bar:hover { opacity: 1; }
+  .chart-bar .tip {
+    display: none;
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #30363d;
+    color: var(--text);
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .chart-bar:hover .tip { display: block; }
+
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 30px;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📡</div>
+  <h1>QR Scan Logger</h1>
+  <div class="chip">
+    <span id="statusDot"></span>
+    <span id="statusText">Mengecek...</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Config Banner -->
+  <div class="config-banner">
+    <span style="color:var(--amber)">⚙</span>
+    <span style="color:var(--muted);font-size:12px">Server API:</span>
+    <input type="text" id="apiBase" placeholder="http://192.168.1.100/qrscan-api/api.php">
+    <button onclick="simpanConfig()">Simpan</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="val" id="statTotal">—</div>
+      <div class="lbl">Total Log</div>
+    </div>
+    <div class="stat-card">
+      <div class="val" id="statHari" style="color:var(--green)">—</div>
+      <div class="lbl">Hari Ini</div>
+    </div>
+    <div class="stat-card">
+      <div class="val" id="statDevice" style="color:var(--amber)">—</div>
+      <div class="lbl">Device</div>
+    </div>
+    <div class="stat-card" style="grid-column: span 1;">
+      <div class="val" style="font-size:11px;color:var(--muted);margin-top:4px" id="statLast">—</div>
+      <div class="lbl">Scan Terakhir</div>
+    </div>
+  </div>
+
+  <!-- Main Grid -->
+  <div class="grid">
+
+    <!-- Panel Scanner -->
+    <div class="panel">
+      <div class="panel-head">
+        📷 Scanner QR (Kamera HP)
+      </div>
+      <div class="panel-body">
+
+        <div id="qr-reader"></div>
+
+        <div class="scan-result empty" id="scanResult">
+          Arahkan kamera ke QR code...
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-green" id="btnStart" onclick="mulaiScan()">▶ Mulai Scan</button>
+          <button class="btn btn-gray"  id="btnStop"  onclick="stopScan()" style="display:none">⏹ Stop</button>
+          <button class="btn btn-blue"  id="btnKirim" onclick="kirimManual()" disabled>↑ Kirim</button>
+        </div>
+
+        <div class="manual-row">
+          <input type="text" id="inputManual" placeholder="Input manual / hasil scan..." 
+            onkeydown="if(event.key==='Enter') kirimManual()">
+          <button class="btn btn-green" onclick="kirimManual()" style="flex:none;padding:8px 14px">Kirim</button>
+        </div>
+
+        <!-- Mini Chart 7 hari -->
+        <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Scan 7 hari terakhir</div>
+          <div class="chart-bars" id="chartBars">
+            <div class="empty-state" style="flex:1;padding:10px">Belum ada data</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Panel Log -->
+    <div class="panel">
+      <div class="panel-head">
+        📋 Log Scan
+        <button class="btn btn-gray" onclick="loadLog()" style="margin-left:auto;padding:4px 10px;font-size:11px">↻ Refresh</button>
+      </div>
+      <div class="panel-body" style="padding:12px">
+
+        <div class="log-controls">
+          <input type="text" id="searchQ" placeholder="🔍 Cari QR data..." 
+            oninput="loadLog()" style="max-width:none">
+        </div>
+
+        <div class="log-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>QR Data</th>
+                <th>Device</th>
+                <th>Waktu</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="logBody">
+              <tr><td colspan="5" class="empty-state">Memuat...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:10px;font-size:11px;color:var(--muted)" id="logInfo"></div>
+
+      </div>
+    </div>
+
+  </div><!-- /grid -->
+</div><!-- /container -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+let API_BASE = localStorage.getItem('qr_api_base') || '';
+let html5QrCode = null;
+let lastScanData = '';
+let logInterval = null;
+let scanning = false;
+
+function getApi() {
+  return API_BASE || document.getElementById('apiBase').value.trim() || 'api.php';
+}
+
+function simpanConfig() {
+  const val = document.getElementById('apiBase').value.trim();
+  if (!val) { toast('Masukkan URL API server', 'err'); return; }
+  API_BASE = val;
+  localStorage.setItem('qr_api_base', val);
+  toast('Config tersimpan', 'ok');
+  cekKoneksi();
+  loadLog();
+  loadStats();
+}
+
+// isi dari localStorage
+window.addEventListener('DOMContentLoaded', () => {
+  if (API_BASE) document.getElementById('apiBase').value = API_BASE;
+  cekKoneksi();
+  loadLog();
+  loadStats();
+  logInterval = setInterval(() => { loadLog(); loadStats(); }, 15000);
+});
+
+// ============================================================
+// CEK KONEKSI
+// ============================================================
+async function cekKoneksi() {
+  const dot  = document.getElementById('statusDot');
+  const txt  = document.getElementById('statusText');
+  dot.className = '';
+  try {
+    const res = await fetch(getApi() + '?action=stats', { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      dot.className = 'online';
+      txt.textContent = 'Online';
+    } else throw new Error();
+  } catch {
+    dot.className = 'offline';
+    txt.textContent = 'Offline';
+  }
+}
+
+// ============================================================
+// QR SCANNER
+// ============================================================
+async function mulaiScan() {
+  if (scanning) return;
+
+  try {
+    html5QrCode = new Html5Qrcode("qr-reader");
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1 },
+      onScanSuccess,
+      null
+    );
+    scanning = true;
+    document.getElementById('btnStart').style.display = 'none';
+    document.getElementById('btnStop').style.display  = '';
+  } catch(e) {
+    toast('Tidak bisa akses kamera: ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+function stopScan() {
+  if (html5QrCode && scanning) {
+    html5QrCode.stop().catch(() => {});
+    scanning = false;
+  }
+  document.getElementById('btnStart').style.display = '';
+  document.getElementById('btnStop').style.display  = 'none';
+}
+
+function onScanSuccess(decodedText) {
+  if (decodedText === lastScanData) return; // debounce
+
+  lastScanData = decodedText;
+  const el = document.getElementById('scanResult');
+  el.textContent = decodedText;
+  el.className = 'scan-result';
+
+  document.getElementById('inputManual').value = decodedText;
+  document.getElementById('btnKirim').disabled = false;
+
+  // Auto kirim ke server
+  kirimLog(decodedText);
+
+  // Feedback visual
+  el.style.border = '1px solid var(--green)';
+  setTimeout(() => { el.style.border = '1px solid var(--border)'; }, 1500);
+
+  // Vibrate HP
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+  // Cooldown 2 detik biar tidak spam
+  setTimeout(() => { lastScanData = ''; }, 2000);
+}
+
+// ============================================================
+// INPUT MANUAL
+// ============================================================
+function kirimManual() {
+  const val = document.getElementById('inputManual').value.trim();
+  if (!val) { toast('Isi data QR terlebih dahulu', 'err'); return; }
+  kirimLog(val);
+  document.getElementById('inputManual').value = '';
+}
+
+// ============================================================
+// API: CREATE LOG
+// ============================================================
+async function kirimLog(qrData) {
+  try {
+    const res = await fetch(getApi() + '?action=log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        qr_data:   qrData,
+        device_id: 'HP-Browser-' + navigator.platform,
+        rssi:      0
+      })
+    });
+    const json = await res.json();
+    if (json.status === 'success') {
+      toast('✓ Log tersimpan (ID: ' + json.id + ')', 'ok');
+      loadLog();
+      loadStats();
+    } else {
+      toast('Gagal: ' + (json.message || 'Error'), 'err');
+    }
+  } catch(e) {
+    toast('Koneksi gagal ke server', 'err');
+    console.error(e);
+  }
+}
+
+// ============================================================
+// API: GET LOG LIST
+// ============================================================
+async function loadLog() {
+  const q = document.getElementById('searchQ')?.value?.trim() || '';
+  const url = getApi() + '?action=list&limit=30' + (q ? '&q=' + encodeURIComponent(q) : '');
+
+  try {
+    const res  = await fetch(url);
+    const json = await res.json();
+
+    if (json.status !== 'success') throw new Error(json.message);
+
+    const tbody = document.getElementById('logBody');
+    const data  = json.data;
+
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Belum ada log scan</td></tr>';
+      document.getElementById('logInfo').textContent = '';
+      return;
+    }
+
+    tbody.innerHTML = data.map(row => `
+      <tr>
+        <td><span class="badge badge-blue">#${row.id}</span></td>
+        <td title="${escHtml(row.qr_data)}" style="max-width:140px">${escHtml(row.qr_data.substring(0,30))}${row.qr_data.length>30?'…':''}</td>
+        <td style="color:var(--muted);font-size:11px">${escHtml((row.device_id||'').substring(0,16))}</td>
+        <td style="color:var(--muted);font-size:11px;white-space:nowrap">${formatTime(row.created_at)}</td>
+        <td><button class="btn-icon" onclick="hapusLog(${row.id})" title="Hapus">✕</button></td>
+      </tr>
+    `).join('');
+
+    document.getElementById('logInfo').textContent =
+      `Menampilkan ${data.length} dari ${json.total} log`;
+
+  } catch(e) {
+    document.getElementById('logBody').innerHTML =
+      '<tr><td colspan="5" class="empty-state" style="color:var(--danger)">Gagal memuat log</td></tr>';
+  }
+}
+
+// ============================================================
+// API: DELETE LOG
+// ============================================================
+async function hapusLog(id) {
+  if (!confirm('Hapus log #' + id + '?')) return;
+  try {
+    const res  = await fetch(getApi() + '?action=delete&id=' + id, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.status === 'success') {
+      toast('Log #' + id + ' dihapus', 'ok');
+      loadLog();
+      loadStats();
+    } else {
+      toast('Gagal hapus: ' + json.message, 'err');
+    }
+  } catch {
+    toast('Koneksi gagal', 'err');
+  }
+}
+
+// ============================================================
+// API: STATS
+// ============================================================
+async function loadStats() {
+  try {
+    const res  = await fetch(getApi() + '?action=stats');
+    const json = await res.json();
+    if (json.status !== 'success') return;
+
+    document.getElementById('statTotal').textContent  = json.total_log;
+    document.getElementById('statHari').textContent   = json.hari_ini;
+    document.getElementById('statDevice').textContent = json.device_count;
+    document.getElementById('statLast').textContent   = json.last_scan !== '-'
+      ? formatTime(json.last_scan) : '-';
+
+    // Mini chart
+    renderChart(json.per_hari || []);
+  } catch {}
+}
+
+// ============================================================
+// MINI CHART
+// ============================================================
+function renderChart(data) {
+  const container = document.getElementById('chartBars');
+  if (!data.length) return;
+
+  const max = Math.max(...data.map(d => d.jumlah), 1);
+  container.innerHTML = data.map(d => {
+    const h = Math.round((d.jumlah / max) * 100);
+    const tgl = d.tanggal.substring(5); // MM-DD
+    return `<div class="chart-bar" style="height:${h}%">
+      <div class="tip">${tgl}: ${d.jumlah}</div>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 2800);
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function formatTime(dt) {
+  if (!dt) return '-';
+  const d = new Date(dt.replace(' ', 'T'));
+  if (isNaN(d)) return dt;
+  const now = new Date();
+  const diff = Math.floor((now - d) / 1000);
+  if (diff < 60)    return diff + 'd lalu';
+  if (diff < 3600)  return Math.floor(diff/60) + 'm lalu';
+  if (diff < 86400) return Math.floor(diff/3600) + 'j lalu';
+  return d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+</script>
+</body>
+</html>
